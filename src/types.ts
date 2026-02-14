@@ -1,5 +1,5 @@
 /**
- * 「@code」と「$」を持つ共通構造
+ * Common structure with "@code" and "$"
  */
 export interface CodeValue {
     '@code': string;
@@ -16,7 +16,7 @@ export interface StatsList {
     DATALIST_INF: DataListInf;
 }
 
-/* ────── パラメータ ────── */
+/* ────── Parameter ────── */
 export interface Parameter {
     LANG: string;
     DATA_FORMAT?: string;
@@ -35,16 +35,16 @@ export interface Parameter {
     UPDATED_DATE?: string;
 }
 
-/* ────── 結果情報 ────── */
+/* ────── Result Info ────── */
 export interface Result {
     STATUS: number;
     ERROR_MSG: string;
     DATE: string;
 }
 
-/* ────── データリスト情報 ────── */
+/* ────── Data List Info ────── */
 
-/* === API が返す「TABLE_INF」、「LIST_INF」＝配列 OR 単体 ================= */
+/* === "TABLE_INF" and "LIST_INF" returned by API = Array OR Single object ================= */
 export type TableInfRaw = TableInf | TableInf[];
 export type ListInfRaw = ListInf | ListInf[];
 
@@ -52,7 +52,7 @@ export interface DataListInf {
     NUMBER: number;
     RESULT_INF: ListResultInf;
     TABLE_INF: TableInfRaw;
-    LIST_INF?: ListInfRaw;
+    LIST_INF: ListInfRaw;
 }
 
 export interface ListResultInf {
@@ -66,13 +66,13 @@ export interface ListInf {
     GOV_ORG: CodeValue;
 }
 
-/* ────── テーブル情報（TableInf） ────── */
+/* ────── Table Info (TableInf) ────── */
 export interface TableInf {
     '@id': string;
     STAT_NAME: CodeValue;
     GOV_ORG: CodeValue;
     STATISTICS_NAME: string;
-    TITLE: Title;
+    TITLE: string | { '@no': string; $: string };
     CYCLE: string;
     SURVEY_DATE: string;
     OPEN_DATE: string;
@@ -88,9 +88,12 @@ export interface TableInf {
     releaseCount?: number;
 }
 
-export interface Title {
-    '@no'?: string;
-    $: string;
+export function getStringValue(obj: any): string {
+    if (typeof obj === "string") {
+        return obj;
+    } else {
+        return obj.$;
+    }
 }
 
 export interface StatisticsNameSpec {
@@ -119,7 +122,7 @@ export interface TitleSpec {
 }
 
 /* ----------------------------------------------
-   MetaInfo（GET_META_INFO）
+   MetaInfo (GET_META_INFO)
 ---------------------------------------------- */
 export interface API_MetaInfo {
     GET_META_INFO: MetaInfo;
@@ -146,8 +149,6 @@ export interface MetadataInf {
 /* ----------------------------------------------
    CLASS_OBJ
 ---------------------------------------------- */
-export type ClassRaw = ClassObjClass | ClassObjClass[];
-
 export interface ClassInf {
     CLASS_OBJ: ClassObj[];
 }
@@ -160,6 +161,8 @@ export interface ClassObj {
     CLASS: ClassRaw;
 }
 
+export type ClassRaw = ClassObjClass | ClassObjClass[];
+
 export interface ClassObjClass {
     '@code': string;
     '@name': string;
@@ -170,7 +173,7 @@ export interface ClassObjClass {
 }
 
 /* ----------------------------------------------
-   StatsDataInfo（GET_STATS_DATA）
+   StatsDataInfo (GET_STATS_DATA)
 ---------------------------------------------- */
 export interface API_StatsData {
     GET_STATS_DATA: StatsDataInfo;
@@ -179,7 +182,7 @@ export interface API_StatsData {
 export interface StatsDataInfo {
     RESULT: Result;
     PARAMETER: StatsParameter;
-    STATISTICAL_DATA?: StatisticalData;
+    STATISTICAL_DATA: StatisticalData;
 }
 
 export interface StatsParameter {
@@ -262,13 +265,13 @@ export interface NarrowingCond {
 }
 
 /* ----------------------------------------------
-   StatisticalData（GET_STATS_DATA -> STATISTICAL_DATA）
+   StatisticalData (GET_STATS_DATA -> STATISTICAL_DATA)
 ---------------------------------------------- */
 export interface StatisticalData {
     RESULT_INF: DataResultInf;
     TABLE_INF: TableInf;
-    CLASS_INF?: ClassObj[];
-    DATA_INF?: DataInf;
+    CLASS_INF: ClassInf;
+    DATA_INF: DataInf;
 }
 
 export interface DataResultInf {
@@ -279,11 +282,11 @@ export interface DataResultInf {
 }
 
 /* ----------------------------------------------
-   DataInf（STATISTICAL_DATA -> DATA_INF）
+   DataInf (STATISTICAL_DATA -> DATA_INF)
 ---------------------------------------------- */
 export interface DataInf {
-    NOTE: Note[];
-    ANNOTATION: Annotation[];
+    NOTE?: Note[];
+    ANNOTATION?: Annotation[];
     VALUE: Value[];
 }
 
@@ -310,20 +313,4 @@ export interface Value {
     '@annotation'?: string;
 
     $: string | number;
-}
-
-export interface AtTrimmedValue {
-    [key: string]: string | number | undefined;
-}
-
-export interface OptimizedGroup {
-    metadata: { [key: string]: any };
-    values: { [key: string]: any }[];
-}
-
-export interface GroupingResult {
-    groups: OptimizedGroup[];
-    totalOriginalSize: number;
-    totalCompressedSize: number;
-    compressionRatio: number;
 }

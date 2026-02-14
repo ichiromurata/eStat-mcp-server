@@ -1,50 +1,123 @@
-# Building a Remote MCP Server on Cloudflare (Without Auth)
+# e-Stat API Search MCP Server
 
-This example allows you to deploy a remote MCP server that doesn't require authentication on Cloudflare Workers. 
+This is a **Model Context Protocol (MCP)** server that runs on [Cloudflare Workers](https://workers.cloudflare.com/) and provides an interface to the **[e-Stat API](https://www.e-stat.go.jp/api/)** (Official Statistics of Japan).
 
-## Get started: 
+It allows AI agents (like Claude Desktop) to search for Japanese government statistical tables, inspect metadata, and retrieve statistical data for analysis.
 
-[![Deploy to Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/ai/tree/main/demos/remote-mcp-authless)
+## Features
 
-This will deploy your MCP server to a URL like: `remote-mcp-server-authless.<your-account>.workers.dev/sse`
+- **Search Tables (`get_tables`)**: Find statistical tables by keywords, ministry code, or category.
+- **Search Surveys (`get_surveys`)**: Find available surveys if you are unsure about specific tables.
+- **Get Metadata (`get_metadata`)**: Retrieve detailed metadata (classifications, area codes, time periods) for a specific table.
+- **Get Data (`get_data`)**: Fetch the actual statistical data values based on the table ID and optional filters.
 
-Alternatively, you can use the command line below to get the remote MCP Server created on your local machine:
+## Prerequisites
+
+- **Node.js**: (v18 or later recommended)
+- **Cloudflare Wrangler**: CLI tool for Cloudflare Workers.
+- **e-Stat API Key**: You must register to get an "Application ID" (appId).
+  - [Register for e-Stat API](https://www.e-stat.go.jp/api/api-dev/how_to_use)
+
+## Setup
+
+1. **Clone the repository**
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables**
+   This server requires the `ESTAT_API_KEY` environment variable.
+
+   **For Local Development:**
+   Create a `.dev.vars` file in the project root:
+   ```text
+   ESTAT_API_KEY=your_app_id_here
+   ```
+
+   **For Production (Cloudflare Deployment):**
+   Set the secret using Wrangler:
+   ```bash
+   npx wrangler secret put ESTAT_API_KEY
+   # Enter your App ID when prompted
+   ```
+
+## Usage
+
+### Local Development
+
+To run the MCP server locally for testing:
+
 ```bash
-npm create cloudflare@latest -- my-mcp-server --template=cloudflare/ai/demos/remote-mcp-authless
+npm run dev
+```
+This will start the server at `http://localhost:8787`.
+
+### Deployment
+
+To deploy to your Cloudflare Workers account:
+
+```bash
+npm run deploy
 ```
 
-## Customizing your MCP Server
+## Connecting to Claude Desktop
 
-To add your own [tools](https://developers.cloudflare.com/agents/model-context-protocol/tools/) to the MCP server, define each tool inside the `init()` method of `src/index.ts` using `this.server.tool(...)`. 
+To use this MCP server with [Claude Desktop](https://claude.ai/download), add the following configuration to your Claude Desktop config file:
 
-## Connect to Cloudflare AI Playground
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
-You can connect to your MCP server from the Cloudflare AI Playground, which is a remote MCP client:
-
-1. Go to https://playground.ai.cloudflare.com/
-2. Enter your deployed MCP server URL (`remote-mcp-server-authless.<your-account>.workers.dev/sse`)
-3. You can now use your MCP tools directly from the playground!
-
-## Connect Claude Desktop to your MCP server
-
-You can also connect to your remote MCP server from local MCP clients, by using the [mcp-remote proxy](https://www.npmjs.com/package/mcp-remote). 
-
-To connect to your MCP server from Claude Desktop, follow [Anthropic's Quickstart](https://modelcontextprotocol.io/quickstart/user) and within Claude Desktop go to Settings > Developer > Edit Config.
-
-Update with this configuration:
+**Configuration:**
 
 ```json
 {
   "mcpServers": {
-    "calculator": {
+    "e-stat-search": {
       "command": "npx",
       "args": [
-        "mcp-remote",
-        "http://localhost:8787/sse"  // or remote-mcp-server-authless.your-account.workers.dev/sse
+        "-y",
+        "@modelcontextprotocol/server-cloudflare",
+        "start",
+        "https://<your-worker-name>.<your-subdomain>.workers.dev"
       ]
     }
   }
 }
 ```
 
-Restart Claude and you should see the tools become available. 
+*Note: Replace the URL with your deployed Cloudflare Worker URL, or use `http://localhost:8787` if running locally along with `mcp-remote`.*
+
+Alternatively, if you are running locally and want to connect directly:
+
+```json
+{
+  "mcpServers": {
+    "e-stat-local": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:8787/sse"
+      ]
+    }
+  }
+}
+```
+
+## Tools Available
+
+### `get_tables`
+Searches for statistical tables.
+- **Parameters**: `searchWord`, `statsCode`, `limit`, etc.
+
+### `get_surveys`
+Searches for surveys. Useful for data discovery.
+- **Parameters**: `searchWord`, `limit`, etc.
+
+### `get_metadata`
+Retrieves structure and classification information for a table.
+- **Parameters**: `statsDataId` (Required).
+
+### `get_data`
+Fetches the actual data records.
+- **Parameters**: `statsDataId` (Required), and optional filters like `cdCat01`, `cdTime`, `cdArea`.

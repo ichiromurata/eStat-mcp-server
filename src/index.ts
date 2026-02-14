@@ -6,15 +6,14 @@ import {
 	API_MetaInfo,
 	API_StatsData,
 	API_StatsList,
-	TableInf,
-	ListInf
+	getStringValue
 } from "./types";
 import {
-	optimizeGroupingByCommonElements,
-	stripAtPrefix,
-	tableToString,
-	toArray
-} from "./utils";
+	packTableInf,
+	packListInf,
+	packClassInf,
+	packDataInf
+} from "./packing";
 
 // Define our MCP agent with tools
 export class MyMCP extends McpAgent {
@@ -23,7 +22,18 @@ export class MyMCP extends McpAgent {
 		version: "0.1.0",
 	});
 
+	BASE_URL = "https://api.e-stat.go.jp/rest/3.0/app";
+	GETSTATS_ENDPOINT = `${this.BASE_URL}/json/getStatsList`;
+	GETMETA_ENDPOINT = `${this.BASE_URL}/json/getMetaInfo`;
+	GETDATA_ENDPOINT = `${this.BASE_URL}/json/getStatsData`;
+
 	async init() {
+		// @ts-ignore; will work on execution
+		const appId = env.ESTAT_API_KEY;
+		if (!appId) {
+			throw new Error("ESTAT_API_KEY environment variable is not set.");
+		}
+
 		// getStatsList
 		this.server.registerTool(
 			"get_tables",
@@ -48,12 +58,7 @@ export class MyMCP extends McpAgent {
 				}
 			},
 			async (params, extra) => {
-				const appId = env.ESTAT_API_KEY;
-				if (!appId) {
-					throw new Error("ESTAT_API_KEY environment variable is not set.");
-				}
-
-				const url = new URL("https://api.e-stat.go.jp/rest/3.0/app/json/getStatsList");
+				const url = new URL(this.GETSTATS_ENDPOINT);
 
 				url.searchParams.append("appId", appId);
 				for (const [key, value] of Object.entries(params)) {
@@ -81,37 +86,11 @@ export class MyMCP extends McpAgent {
 					throw new Error(`e-Stat API error ${statsList.RESULT.ERROR_MSG}`);
 				}
 
-				// Remove duplicates
-				const rawTables: TableInf[] = toArray(statsList.DATALIST_INF.TABLE_INF); // Ensure array
-				const seenStrings = new Set<string>();
-				const tableList: TableInf[] = rawTables.filter((tbl) => {
-					const key = tableToString(tbl);
-					if (seenStrings.has(key)) return false;
-					seenStrings.add(key);
-					return true;
-				});
+				const tablePacked = packTableInf(statsList.DATALIST_INF.TABLE_INF);
 
-				// Group tables by statistics name, then by government
-				const tableGrouped: Record<string, Record<string, { statsDataId: string; title: string }[]>> = {};
-				for (const tbl of tableList) {
-					const govOrg = tbl.GOV_ORG.$;
-					const statisticsName = tbl.STATISTICS_NAME;
-
-					if (!tableGrouped[govOrg]) {
-						tableGrouped[govOrg] = {};
-					}
-					const subGroup = tableGrouped[govOrg];
-
-					if (!subGroup[statisticsName]) {
-						subGroup[statisticsName] = [];
-					}
-
-					subGroup[statisticsName].push({ statsDataId: tbl['@id'], title: tbl.TITLE.$ });
-				}
-
-				const result: { type: "text"; text: string }[] = [{ type: "text", text: JSON.stringify(tableGrouped) }];
+				const result: { type: "text"; text: string }[] = [{ type: "text", text: JSON.stringify(tablePacked) }];
 				if (statsList.DATALIST_INF.RESULT_INF.NEXT_KEY !== undefined) {
-					result.push({ type: "text", text: `This is a part of results. The request with 'startPosition: ${statsList.DATALIST_INF.RESULT_INF.NEXT_KEY}' will retrieve the next part.` });
+					result.push({ type: "text", text: `This is a part of results. Request with 'startPosition: ${statsList.DATALIST_INF.RESULT_INF.NEXT_KEY}' to get the next part.` });
 				}
 
 				return {
@@ -140,12 +119,7 @@ export class MyMCP extends McpAgent {
 				}
 			},
 			async (params, extra) => {
-				const appId = env.ESTAT_API_KEY;
-				if (!appId) {
-					throw new Error("ESTAT_API_KEY environment variable is not set.");
-				}
-
-				const url = new URL("https://api.e-stat.go.jp/rest/3.0/app/json/getStatsList");
+				const url = new URL(this.GETSTATS_ENDPOINT);
 
 				url.searchParams.append("appId", appId);
 				for (const [key, value] of Object.entries(params)) {
@@ -157,7 +131,7 @@ export class MyMCP extends McpAgent {
 				url.searchParams.append("statsNameList", "Y");
 				// Default limit
 				if (!params.limit) {
-					url.searchParams.append("limit", "100");
+					url.searchParams.append("limit", "1000");
 				}
 
 				const response = await fetch(url.toString(), {
@@ -173,23 +147,11 @@ export class MyMCP extends McpAgent {
 					throw new Error(`e-Stat API error ${statsList.RESULT.ERROR_MSG}`);
 				}
 
-				const surveyList: ListInf[] = toArray(statsList.DATALIST_INF.LIST_INF).filter((i): i is ListInf => i !== undefined);
-				// Group tables by statistics name, then by government
-				const surveyGrouped: Record<string, { statsCode: string; name: string }[]> = {};
-				for (const survey of surveyList) {
-					if (!survey) continue;
-					const govOrg = survey.GOV_ORG.$;
+				const listPacked = packListInf(statsList.DATALIST_INF.LIST_INF);
 
-					if (!surveyGrouped[govOrg]) {
-						surveyGrouped[govOrg] = [];
-					}
-
-					surveyGrouped[govOrg].push({ statsCode: survey['@id'], name: survey.STAT_NAME.$ });
-				}
-
-				const result: { type: "text"; text: string }[] = [{ type: "text", text: JSON.stringify(surveyGrouped) }];
+				const result: { type: "text"; text: string }[] = [{ type: "text", text: JSON.stringify(listPacked) }];
 				if (statsList.DATALIST_INF.RESULT_INF.NEXT_KEY !== undefined) {
-					result.push({ type: "text", text: `This is a part of results. The request with 'startPosition: ${statsList.DATALIST_INF.RESULT_INF.NEXT_KEY}' will retrieve the next part.` });
+					result.push({ type: "text", text: `This is a part of results. Request with 'startPosition: ${statsList.DATALIST_INF.RESULT_INF.NEXT_KEY}' to get the next part.` });
 				}
 
 				return {
@@ -207,12 +169,7 @@ export class MyMCP extends McpAgent {
 				}
 			},
 			async (params, extra) => {
-				const appId = env.ESTAT_API_KEY;
-				if (!appId) {
-					throw new Error("ESTAT_API_KEY environment variable is not set.");
-				}
-
-				const url = new URL("https://api.e-stat.go.jp/rest/3.0/app/json/getMetaInfo");
+				const url = new URL(this.GETMETA_ENDPOINT);
 
 				url.searchParams.append("appId", appId);
 				for (const [key, value] of Object.entries(params)) {
@@ -236,23 +193,19 @@ export class MyMCP extends McpAgent {
 					throw new Error(`e-Stat API error ${metaInfo.RESULT.ERROR_MSG}`);
 				}
 
-				const title = metaInfo.METADATA_INF.TABLE_INF.TITLE.$;
-				const classList = metaInfo.METADATA_INF.CLASS_INF.CLASS_OBJ;
-				const shortClasses: Record<string, any> = {};
-				for (const clsObj of classList) {
-					const shortItems: Record<string, string> = {};
-					for (const clsItem of toArray(clsObj.CLASS)) {
-						shortItems[clsItem['@code']] = clsItem['@name'];
-					}
-
-					shortClasses[clsObj['@id']] = { name: clsObj['@name'], code: shortItems };
-				}
+				const id = metaInfo.METADATA_INF.TABLE_INF["@id"];
+				const tbltitle = getStringValue(metaInfo.METADATA_INF.TABLE_INF.TITLE);
+				const classInf = metaInfo.METADATA_INF.CLASS_INF
 
 				return {
 					content: [
 						{
 							type: "text",
-							text: JSON.stringify({ [title]: shortClasses })
+							text: JSON.stringify({
+								statsDataId: id,
+								title: tbltitle,
+								metaInfo: packClassInf(classInf)
+							})
 						}
 					]
 				};
@@ -263,7 +216,7 @@ export class MyMCP extends McpAgent {
 			"get_data",
 			{
 				description: `Fetches data for the specified table. If you do not know the table ID, use 'get_tables' first.
-				Use metadata to apply filters. Some result values may include annotations such as '100 <A1>'.`,
+				Use metadata to apply filters.`,
 				inputSchema: {
 					statsDataId: z.string().describe("ID of the statistical table"),
 					cdTab: z.string().describe("Item code for filtering data").optional(),
@@ -286,12 +239,7 @@ export class MyMCP extends McpAgent {
 				}
 			},
 			async (params, extra) => {
-				const appId = env.ESTAT_API_KEY;
-				if (!appId) {
-					throw new Error("ESTAT_API_KEY environment variable is not set.");
-				}
-
-				const url = new URL("https://api.e-stat.go.jp/rest/3.0/app/json/getStatsData");
+				const url = new URL(this.GETDATA_ENDPOINT);
 
 				url.searchParams.append("appId", appId);
 				for (const [key, value] of Object.entries(params)) {
@@ -313,14 +261,13 @@ export class MyMCP extends McpAgent {
 					throw new Error(`e-Stat API error ${statsData.RESULT.ERROR_MSG}`);
 				}
 
-				const atTrimmedData = statsData.STATISTICAL_DATA?.DATA_INF?.VALUE?.map(stripAtPrefix) ?? [];
-				const groupedData = optimizeGroupingByCommonElements(atTrimmedData);
+				const packedData = packDataInf(statsData.STATISTICAL_DATA.DATA_INF, statsData.STATISTICAL_DATA.CLASS_INF)
 
 				return {
 					content: [
 						{
 							type: "text",
-							text: JSON.stringify(groupedData.groups)
+							text: JSON.stringify(packedData)
 						}
 					]
 				};
