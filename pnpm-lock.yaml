@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       agents:
-        specifier: ^0.3.0
-        version: 0.3.0(@cloudflare/workers-types@4.20251228.0)(react@19.2.3)(typescript@5.9.3)(zod@4.2.1)
+        specifier: ^0.4.1
+        version: 0.4.1(@cloudflare/workers-types@4.20251228.0)(react@19.2.3)(typescript@5.9.3)(zod@4.2.1)
       zod:
         specifier: ^4.1.8
         version: 4.2.1
