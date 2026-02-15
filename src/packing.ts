@@ -247,7 +247,7 @@ export function packDataInf(
     excludeFromDims.add("unit"); // unit is already represented in valueCols (or not needed)
 
     const present = new Set<string>();
-    for (const row of dataInf.VALUE) {
+    for (const row of toArray(dataInf.VALUE)) {
         for (const k of ALL_DIM_KEYS) {
             if (excludeFromDims.has(k)) continue;
             const attr = `@${k}` as keyof Value;
@@ -268,7 +268,7 @@ export function packDataInf(
     for (const dim of candidateDims) {
         uniqueValuesPerDim.set(dim, new Set());
     }
-    for (const row of dataInf.VALUE) {
+    for (const row of toArray(dataInf.VALUE)) {
         for (const dim of candidateDims) {
             const attr = `@${dim}` as keyof Value;
             const v = row[attr] as string | undefined;
@@ -297,7 +297,7 @@ export function packDataInf(
         }
     >();
 
-    for (const row of dataInf.VALUE) {
+    for (const row of toArray(dataInf.VALUE)) {
         // Extract values for remaining dimensions
         const dimValues: Array<string | null> = dims.map((dim) => {
             const attr = `@${dim}` as keyof Value;
